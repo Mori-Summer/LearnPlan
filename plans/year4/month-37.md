@@ -14,7 +14,45 @@
 
 ## 理论学习内容
 
-### 第一周：Modern CMake基础理念
+### 第一周：Modern CMake基础理念（35小时）
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Week 1: Modern CMake 基础理念                                   │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Day 1-2: CMake执行模型与核心概念                                │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐       │
+│  │配置阶段   │→│生成阶段   │→│构建阶段   │→│安装阶段   │       │
+│  │Configure │  │Generate  │  │ Build    │  │Install   │       │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘       │
+│                                                                 │
+│  Day 3-4: Target-centric模型与属性系统                          │
+│  ┌─────────────────────────────────────────────────────┐       │
+│  │  Target = 编译产物 + 属性(Properties) + 依赖        │       │
+│  │  Properties: COMPILE_OPTIONS, INCLUDE_DIRECTORIES...│       │
+│  └─────────────────────────────────────────────────────┘       │
+│                                                                 │
+│  Day 5-7: 变量系统、缓存与传统vs现代对比                         │
+│  ┌─────────────────────────────────────────────────────┐       │
+│  │  Normal Variables → Cache Variables → Environment    │       │
+│  │  传统CMake(全局) → Modern CMake(Target级)            │       │
+│  └─────────────────────────────────────────────────────┘       │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### 每日任务分解
+
+| Day | 时间 | 上午任务(2.5h) | 下午任务(2.5h) | 输出物 |
+|-----|------|---------------|---------------|--------|
+| 1 | 5h | CMake执行流程(Configure/Generate/Build) | 阅读《Professional CMake》1-2章 | notes/cmake_execution.md |
+| 2 | 5h | project()命令详解、版本策略 | cmake_minimum_required策略实践 | notes/cmake_project.md |
+| 3 | 5h | Target类型(EXECUTABLE/LIBRARY/ALIAS等) | Target属性系统深入 | notes/cmake_targets.md |
+| 4 | 5h | 传统CMake反模式分析 | Modern CMake最佳实践重写 | cmake_comparison.cmake |
+| 5 | 5h | 变量作用域与缓存变量 | option()与set(CACHE)机制 | notes/cmake_variables.md |
+| 6 | 5h | 阅读fmt库CMakeLists.txt | 分析其Target-centric设计 | notes/fmt_cmake_analysis.md |
+| 7 | 5h | 编写第一个Modern CMake项目 | "Effective Modern CMake"演讲学习 | practice/week1_project/ |
 
 **学习目标**：理解Modern CMake与传统CMake的区别
 
@@ -22,6 +60,201 @@
 - [ ] 《Professional CMake: A Practical Guide》第1-5章
 - [ ] CMake官方教程 (cmake.org/cmake/help/latest/guide/tutorial)
 - [ ] "Effective Modern CMake" by Daniel Pfeifer (YouTube演讲)
+
+---
+
+#### CMake执行流程详解
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    CMake 执行流程                                    │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  1. Configure阶段                                                   │
+│  ┌────────────────────────────────────────────────┐                 │
+│  │  cmake -S . -B build                           │                 │
+│  │                                                 │                 │
+│  │  ┌──────────────┐     ┌──────────────┐         │                 │
+│  │  │CMakeLists.txt│────►│ CMake解释器  │         │                 │
+│  │  └──────────────┘     └──────┬───────┘         │                 │
+│  │                              │                  │                 │
+│  │                    ┌─────────▼─────────┐       │                 │
+│  │                    │  CMakeCache.txt   │       │                 │
+│  │                    │  (缓存变量)       │       │                 │
+│  │                    └──────────────────┘       │                 │
+│  └────────────────────────────────────────────────┘                 │
+│                              │                                       │
+│  2. Generate阶段             ▼                                       │
+│  ┌────────────────────────────────────────────────┐                 │
+│  │  根据Generator生成构建系统文件                  │                 │
+│  │                                                 │                 │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌───────┐│                 │
+│  │  │  Makefile    │  │  Ninja.build │  │ .sln  ││                 │
+│  │  │  (Unix)      │  │  (跨平台)    │  │(MSVC) ││                 │
+│  │  └──────────────┘  └──────────────┘  └───────┘│                 │
+│  └────────────────────────────────────────────────┘                 │
+│                              │                                       │
+│  3. Build阶段                ▼                                       │
+│  ┌────────────────────────────────────────────────┐                 │
+│  │  cmake --build build                           │                 │
+│  │                                                 │                 │
+│  │  编译器(gcc/clang/msvc) → 链接器 → 可执行文件  │                 │
+│  └────────────────────────────────────────────────┘                 │
+│                              │                                       │
+│  4. Install阶段              ▼                                       │
+│  ┌────────────────────────────────────────────────┐                 │
+│  │  cmake --install build --prefix /usr/local     │                 │
+│  │                                                 │                 │
+│  │  bin/ lib/ include/ share/cmake/               │                 │
+│  └────────────────────────────────────────────────┘                 │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+#### Target属性模型
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Target 属性模型                                   │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   一个Target = 编译产物 + 属性集合 + 依赖关系                      │
+│                                                                     │
+│   ┌─────────────────────────────────────────────────┐              │
+│   │                Target "mylib"                    │              │
+│   ├─────────────────────────────────────────────────┤              │
+│   │                                                  │              │
+│   │  构建属性 (BUILD):                               │              │
+│   │  ├── COMPILE_OPTIONS: -Wall -Wextra             │              │
+│   │  ├── COMPILE_DEFINITIONS: MYLIB_DEBUG           │              │
+│   │  ├── INCLUDE_DIRECTORIES: /src/include          │              │
+│   │  ├── COMPILE_FEATURES: cxx_std_17              │              │
+│   │  └── SOURCES: a.cpp b.cpp c.cpp               │              │
+│   │                                                  │              │
+│   │  链接属性 (LINK):                                │              │
+│   │  ├── LINK_LIBRARIES: fmt::fmt spdlog::spdlog   │              │
+│   │  ├── LINK_OPTIONS: -lpthread                   │              │
+│   │  └── LINK_DIRECTORIES: /usr/local/lib          │              │
+│   │                                                  │              │
+│   │  输出属性 (OUTPUT):                              │              │
+│   │  ├── OUTPUT_NAME: mylib                        │              │
+│   │  ├── VERSION: 1.2.3                            │              │
+│   │  └── SOVERSION: 1                              │              │
+│   │                                                  │              │
+│   │  传播属性 (INTERFACE):                           │              │
+│   │  ├── INTERFACE_INCLUDE_DIRECTORIES              │              │
+│   │  ├── INTERFACE_COMPILE_DEFINITIONS              │              │
+│   │  └── INTERFACE_LINK_LIBRARIES                   │              │
+│   │                                                  │              │
+│   └─────────────────────────────────────────────────┘              │
+│                                                                     │
+│   属性传播规则:                                                     │
+│   ┌────────────┬──────────────────┬──────────────────┐            │
+│   │  关键字     │  Target自身使用  │  传播给消费者     │            │
+│   ├────────────┼──────────────────┼──────────────────┤            │
+│   │  PRIVATE   │       ✓         │       ✗          │            │
+│   │  PUBLIC    │       ✓         │       ✓          │            │
+│   │  INTERFACE │       ✗         │       ✓          │            │
+│   └────────────┴──────────────────┴──────────────────┘            │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+#### 核心概念深入
+
+**cmake_minimum_required 版本策略**：
+
+```cmake
+# ==========================================
+# cmake_minimum_required 与策略(Policy)系统
+# ==========================================
+
+# 这不仅设置最低版本，还影响CMake的行为策略！
+cmake_minimum_required(VERSION 3.16)
+# 等价于设置了3.16及之前所有策略为NEW行为
+
+# 版本范围语法（CMake 3.12+）
+cmake_minimum_required(VERSION 3.16...3.28)
+# 允许3.16~3.28之间的CMake运行，且设置对应版本的策略
+
+# 策略示例
+# CMP0076 (3.13): target_sources()支持相对路径
+# CMP0077 (3.13): option()不覆盖已有的缓存变量
+# CMP0091 (3.15): MSVC运行时库选择（动态/静态）
+# CMP0135 (3.24): FetchContent下载时间戳处理
+
+# 手动设置策略（不推荐，但有时需要兼容）
+cmake_policy(SET CMP0077 NEW)
+```
+
+**变量作用域与缓存变量**：
+
+```cmake
+# ==========================================
+# CMake 变量系统详解
+# ==========================================
+
+# 1. 普通变量 (Normal Variables) - 当前作用域
+set(MY_VAR "hello")
+message(STATUS "MY_VAR = ${MY_VAR}")  # hello
+
+# 2. 作用域规则
+#    - add_subdirectory() 创建新作用域（子目录继承父目录变量的拷贝）
+#    - function() 创建新作用域
+#    - macro() 不创建新作用域！（在调用者作用域中执行）
+
+# 3. 向父作用域传递变量
+function(my_function)
+    set(RESULT "from_function")
+    # 必须显式传递给父作用域
+    set(RESULT "${RESULT}" PARENT_SCOPE)
+endfunction()
+
+# 4. 缓存变量 (Cache Variables) - 全局持久化
+set(MY_CACHE_VAR "default" CACHE STRING "Description of the variable")
+# 类型: BOOL, STRING, PATH, FILEPATH, INTERNAL
+# 首次configure写入CMakeCache.txt，后续不覆盖
+
+# 5. option() 是 set(CACHE BOOL) 的简写
+option(ENABLE_TESTS "Enable unit tests" ON)
+# 等价于:
+set(ENABLE_TESTS ON CACHE BOOL "Enable unit tests")
+
+# 6. 环境变量
+message(STATUS "HOME = $ENV{HOME}")
+set(ENV{MY_ENV} "value")  # 只在当前CMake进程中有效
+
+# 7. 变量作用域可视化
+#
+#   ┌─────────────── 根 CMakeLists.txt ────────────────┐
+#   │  set(ROOT_VAR "root")                             │
+#   │                                                    │
+#   │  ┌───────── src/CMakeLists.txt ──────────────┐   │
+#   │  │  # ROOT_VAR = "root" (继承拷贝)           │   │
+#   │  │  set(SRC_VAR "src")                        │   │
+#   │  │  set(ROOT_VAR "modified")  ← 只修改本地   │   │
+#   │  └───────────────────────────────────────────┘   │
+#   │                                                    │
+#   │  # ROOT_VAR 仍然是 "root"                         │
+#   │  # SRC_VAR 不可见                                  │
+#   └──────────────────────────────────────────────────┘
+#
+#   ┌────── CMakeCache.txt (全局持久) ──────┐
+#   │  ENABLE_TESTS:BOOL=ON                  │
+#   │  CMAKE_BUILD_TYPE:STRING=Release       │
+#   │  CMAKE_INSTALL_PREFIX:PATH=/usr/local  │
+#   └────────────────────────────────────────┘
+
+# 8. 列表变量
+set(MY_LIST "a" "b" "c")           # 等价于 "a;b;c"
+list(APPEND MY_LIST "d")           # "a;b;c;d"
+list(LENGTH MY_LIST LEN)           # LEN = 4
+list(GET MY_LIST 0 FIRST)          # FIRST = "a"
+list(FIND MY_LIST "b" INDEX)       # INDEX = 1
+list(REMOVE_ITEM MY_LIST "b")      # "a;c;d"
+list(SORT MY_LIST)                  # "a;c;d" (已排序)
+list(JOIN MY_LIST ", " JOINED)     # "a, c, d"
+```
 
 **核心概念**：
 
@@ -68,13 +301,235 @@ target_link_libraries(myapp PRIVATE Boost::system Threads::Threads)
 3. **Explicit dependencies**：明确声明依赖关系
 4. **Config files over Find modules**：优先使用现代的Config文件
 
-### 第二周：依赖传播与可见性
+#### Week 1 输出物清单
+
+| 文件 | 说明 | 完成状态 |
+|------|------|---------|
+| `notes/cmake_execution.md` | CMake执行流程笔记 | [ ] |
+| `notes/cmake_project.md` | project()与版本策略 | [ ] |
+| `notes/cmake_targets.md` | Target属性系统详解 | [ ] |
+| `notes/cmake_variables.md` | 变量系统深入笔记 | [ ] |
+| `cmake_comparison.cmake` | 传统vs现代CMake对比 | [ ] |
+| `notes/fmt_cmake_analysis.md` | fmt库CMake分析 | [ ] |
+| `practice/week1_project/` | 第一个Modern CMake项目 | [ ] |
+
+#### Week 1 检验标准
+
+- [ ] 能够解释CMake的Configure/Generate/Build三个阶段
+- [ ] 理解Generator的概念（Makefile/Ninja/MSBuild）
+- [ ] 能够区分普通变量、缓存变量和环境变量的作用域
+- [ ] 能够解释为什么不应该使用include_directories()
+- [ ] 掌握Target的四种类型(EXECUTABLE/STATIC/SHARED/INTERFACE)
+- [ ] 理解cmake_minimum_required与策略系统的关系
+- [ ] 能够将传统CMake项目重写为Modern风格
+- [ ] 完成fmt库CMake配置的阅读分析
+
+---
+
+### 第二周：依赖传播与可见性（35小时）
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Week 2: 依赖传播机制深入                                        │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Day 8-9: PUBLIC/PRIVATE/INTERFACE 完全理解                     │
+│  ┌────────────────────────────────────────────────────────┐    │
+│  │            依赖传播链                                   │    │
+│  │  app ──PRIVATE──► mylib ──PUBLIC──► fmt                │    │
+│  │  app 获得: mylib + fmt (传递依赖)                      │    │
+│  │  app 不获得: mylib的PRIVATE依赖                        │    │
+│  └────────────────────────────────────────────────────────┘    │
+│                                                                 │
+│  Day 10-11: find_package 深入与IMPORTED targets                 │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐       │
+│  │ MODULE模式  │    │ CONFIG模式  │    │  IMPORTED    │       │
+│  │ FindXxx.cmake│   │XxxConfig.cmake│  │  Target      │       │
+│  └─────────────┘    └─────────────┘    └─────────────┘       │
+│                                                                 │
+│  Day 12-14: Generator Expressions 实战                          │
+│  ┌────────────────────────────────────────────────────────┐    │
+│  │  $<CONDITION:VALUE>  $<TARGET_PROPERTY:prop>            │    │
+│  │  BUILD_INTERFACE / INSTALL_INTERFACE                    │    │
+│  └────────────────────────────────────────────────────────┘    │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### 每日任务分解
+
+| Day | 时间 | 上午任务(2.5h) | 下午任务(2.5h) | 输出物 |
+|-----|------|---------------|---------------|--------|
+| 8 | 5h | PUBLIC/PRIVATE/INTERFACE基础 | 传递依赖(Transitive)机制 | notes/dependency_propagation.md |
+| 9 | 5h | INTERFACE库与header-only模式 | 依赖链路调试(cmake --graphviz) | dependency_graph.dot |
+| 10 | 5h | find_package MODULE模式 | find_package CONFIG模式 | notes/find_package.md |
+| 11 | 5h | IMPORTED target详解 | 编写自定义FindXxx.cmake | cmake/FindMyDep.cmake |
+| 12 | 5h | Generator Expressions基础语法 | 条件编译与平台判断表达式 | notes/genexpr.md |
+| 13 | 5h | BUILD_INTERFACE vs INSTALL_INTERFACE | TARGET_PROPERTY查询表达式 | practice/genexpr_demo/ |
+| 14 | 5h | 阅读spdlog CMake配置 | 综合练习：多库依赖项目 | practice/week2_multi_lib/ |
 
 **学习目标**：深入理解PUBLIC/PRIVATE/INTERFACE
 
 **阅读材料**：
 - [ ] CMake文档：target_link_libraries
 - [ ] CMake文档：Transitive Usage Requirements
+
+---
+
+#### 依赖传播链路可视化
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    依赖传播（Transitive Dependencies）               │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   示例依赖图：                                                      │
+│                                                                     │
+│   app ──PRIVATE──► mylib ──PUBLIC──► fmt::fmt                      │
+│                       │                                             │
+│                       ├──PRIVATE──► nlohmann_json                  │
+│                       │                                             │
+│                       └──INTERFACE──► MYLIB_EXPORTS                │
+│                                                                     │
+│   传播结果分析:                                                     │
+│   ┌────────────────────────────────────────────────────────────┐   │
+│   │  Target: app                                                │   │
+│   │                                                              │   │
+│   │  编译时获得:                                                 │   │
+│   │  ├── mylib 的 PUBLIC include dirs                           │   │
+│   │  ├── fmt::fmt 的 INTERFACE include dirs (通过mylib PUBLIC) │   │
+│   │  ├── MYLIB_EXPORTS 宏定义 (通过mylib INTERFACE)            │   │
+│   │  └── cxx_std_17 (如果mylib PUBLIC声明)                     │   │
+│   │                                                              │   │
+│   │  编译时不获得:                                               │   │
+│   │  ├── nlohmann_json 的任何属性 (mylib PRIVATE)              │   │
+│   │  └── mylib 的 PRIVATE include dirs                         │   │
+│   │                                                              │   │
+│   │  链接时获得:                                                 │   │
+│   │  ├── mylib 库文件                                           │   │
+│   │  └── fmt 库文件 (传递依赖)                                 │   │
+│   └────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+│   可视化命令:                                                       │
+│   cmake --graphviz=deps.dot build/                                  │
+│   dot -Tpng deps.dot -o deps.png                                   │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+#### find_package 两种模式对比
+
+```cmake
+# ==========================================
+# find_package 的 MODULE 模式与 CONFIG 模式
+# ==========================================
+
+# MODULE模式 (传统方式)
+# - 搜索 FindXxx.cmake 文件
+# - 由CMake或项目提供
+# - 设置 Xxx_FOUND, Xxx_INCLUDE_DIRS, Xxx_LIBRARIES 等变量
+find_package(ZLIB REQUIRED)  # 使用CMake自带的FindZLIB.cmake
+
+# CONFIG模式 (现代方式，推荐)
+# - 搜索 XxxConfig.cmake 或 xxx-config.cmake
+# - 由库自身提供（安装时生成）
+# - 提供 IMPORTED targets（如 fmt::fmt）
+find_package(fmt CONFIG REQUIRED)  # 搜索 fmtConfig.cmake
+
+# 搜索路径顺序:
+#
+# ┌──────────────────────────────────────────────────────────────┐
+# │  find_package(Foo REQUIRED)                                  │
+# ├──────────────────────────────────────────────────────────────┤
+# │                                                              │
+# │  1. CMAKE_PREFIX_PATH 中的路径                               │
+# │  2. Foo_DIR 变量指定的路径                                    │
+# │  3. 环境变量 CMAKE_PREFIX_PATH                               │
+# │  4. 系统标准路径:                                             │
+# │     - /usr/local/lib/cmake/Foo/                             │
+# │     - /usr/lib/cmake/Foo/                                    │
+# │     - Windows: C:/Program Files/Foo/                        │
+# │  5. CMAKE_MODULE_PATH (仅MODULE模式)                        │
+# │                                                              │
+# └──────────────────────────────────────────────────────────────┘
+
+# 编写自定义 Find 模块
+# cmake/FindMyDep.cmake
+# ==========================================
+# find_path(MYDEP_INCLUDE_DIR
+#     NAMES mydep/mydep.h
+#     PATHS
+#         /usr/local/include
+#         /opt/mydep/include
+#         ${MYDEP_ROOT}/include
+# )
+#
+# find_library(MYDEP_LIBRARY
+#     NAMES mydep
+#     PATHS
+#         /usr/local/lib
+#         /opt/mydep/lib
+#         ${MYDEP_ROOT}/lib
+# )
+#
+# include(FindPackageHandleStandardArgs)
+# find_package_handle_standard_args(MyDep
+#     REQUIRED_VARS MYDEP_LIBRARY MYDEP_INCLUDE_DIR
+# )
+#
+# if(MyDep_FOUND AND NOT TARGET MyDep::MyDep)
+#     add_library(MyDep::MyDep UNKNOWN IMPORTED)
+#     set_target_properties(MyDep::MyDep PROPERTIES
+#         IMPORTED_LOCATION "${MYDEP_LIBRARY}"
+#         INTERFACE_INCLUDE_DIRECTORIES "${MYDEP_INCLUDE_DIR}"
+#     )
+# endif()
+```
+
+#### IMPORTED Target详解
+
+```cmake
+# ==========================================
+# IMPORTED Targets 详解
+# ==========================================
+
+# IMPORTED target是代表外部库的"虚拟"target
+# 它不参与构建，但携带使用该库所需的所有信息
+
+# 1. 手动创建IMPORTED target
+add_library(external::mylib SHARED IMPORTED)
+set_target_properties(external::mylib PROPERTIES
+    IMPORTED_LOCATION "/usr/local/lib/libmylib.so"
+    INTERFACE_INCLUDE_DIRECTORIES "/usr/local/include"
+    INTERFACE_COMPILE_DEFINITIONS "MYLIB_SHARED"
+)
+
+# 2. IMPORTED target的类型
+# STATIC IMPORTED   - 静态库(.a / .lib)
+# SHARED IMPORTED   - 动态库(.so / .dll)
+# MODULE IMPORTED   - 插件模块
+# UNKNOWN IMPORTED  - 类型未知（find模块常用）
+# INTERFACE IMPORTED - 纯接口库(header-only)
+
+# 3. Header-only库的IMPORTED target
+add_library(header_only::lib INTERFACE IMPORTED)
+set_target_properties(header_only::lib PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES "/path/to/headers"
+    INTERFACE_COMPILE_FEATURES "cxx_std_17"
+)
+
+# 4. 带多配置的IMPORTED target
+add_library(ext::lib SHARED IMPORTED)
+set_target_properties(ext::lib PROPERTIES
+    IMPORTED_LOCATION_RELEASE "/opt/lib/libext.so"
+    IMPORTED_LOCATION_DEBUG "/opt/lib/libext_d.so"
+    IMPORTED_CONFIGURATIONS "Release;Debug"
+    INTERFACE_INCLUDE_DIRECTORIES "/opt/include"
+)
+
+# 使用时完全透明，与普通target一样
+# target_link_libraries(myapp PRIVATE external::mylib)
+```
 
 ```cmake
 # ==========================================
@@ -180,7 +635,70 @@ target_link_libraries(myapp
 )
 ```
 
-### 第三周：CMake模块与函数
+#### Week 2 输出物清单
+
+| 文件 | 说明 | 完成状态 |
+|------|------|---------|
+| `notes/dependency_propagation.md` | 依赖传播机制笔记 | [ ] |
+| `dependency_graph.dot` | 依赖关系图(graphviz) | [ ] |
+| `notes/find_package.md` | find_package两种模式 | [ ] |
+| `cmake/FindMyDep.cmake` | 自定义Find模块 | [ ] |
+| `notes/genexpr.md` | Generator Expressions详解 | [ ] |
+| `practice/genexpr_demo/` | 生成器表达式练习项目 | [ ] |
+| `practice/week2_multi_lib/` | 多库依赖综合项目 | [ ] |
+
+#### Week 2 检验标准
+
+- [ ] 能够准确解释PUBLIC/PRIVATE/INTERFACE的传播规则
+- [ ] 能够用cmake --graphviz生成依赖图并分析
+- [ ] 理解INTERFACE库的设计（header-only场景）
+- [ ] 能够区分find_package的MODULE和CONFIG模式
+- [ ] 能够编写自定义FindXxx.cmake模块
+- [ ] 掌握IMPORTED target的创建与属性设置
+- [ ] 能够编写复合Generator Expressions
+- [ ] 理解BUILD_INTERFACE和INSTALL_INTERFACE的区别
+
+---
+
+### 第三周：CMake模块与函数（35小时）
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Week 3: CMake模块化编程                                         │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Day 15-16: function/macro 与代码组织                            │
+│  ┌────────────────────────────────────────────────────────┐    │
+│  │  function() = 新作用域，安全                            │    │
+│  │  macro()    = 调用者作用域，文本替换                     │    │
+│  └────────────────────────────────────────────────────────┘    │
+│                                                                 │
+│  Day 17-18: FetchContent 与远程依赖                              │
+│  ┌────────────────────────────────────────────────────────┐    │
+│  │  FetchContent_Declare → FetchContent_MakeAvailable      │    │
+│  │  ExternalProject_Add (构建时下载)                        │    │
+│  └────────────────────────────────────────────────────────┘    │
+│                                                                 │
+│  Day 19-21: 自定义命令与代码生成                                  │
+│  ┌────────────────────────────────────────────────────────┐    │
+│  │  add_custom_command → add_custom_target                 │    │
+│  │  configure_file → file(GENERATE)                        │    │
+│  └────────────────────────────────────────────────────────┘    │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### 每日任务分解
+
+| Day | 时间 | 上午任务(2.5h) | 下午任务(2.5h) | 输出物 |
+|-----|------|---------------|---------------|--------|
+| 15 | 5h | function() vs macro()对比 | 参数解析cmake_parse_arguments | notes/cmake_functions.md |
+| 16 | 5h | 编写可复用CMake模块 | 模块测试与调试技巧 | cmake/MyModule.cmake |
+| 17 | 5h | FetchContent基础使用 | FetchContent高级配置 | notes/fetchcontent.md |
+| 18 | 5h | ExternalProject_Add深入 | FetchContent vs ExternalProject对比 | practice/fetchcontent_demo/ |
+| 19 | 5h | add_custom_command实战 | add_custom_target实战 | notes/custom_commands.md |
+| 20 | 5h | configure_file模板生成 | file(GENERATE)运行时生成 | cmake/version.hpp.in |
+| 21 | 5h | 综合练习：代码生成管道 | 阅读《Professional CMake》17-20章 | practice/codegen_demo/ |
 
 **学习目标**：编写可复用的CMake代码
 
@@ -316,7 +834,266 @@ function(enable_cppcheck target_name)
 endfunction()
 ```
 
-### 第四周：跨平台项目结构与安装
+#### function() vs macro() 深入对比
+
+```cmake
+# ==========================================
+# function vs macro 关键区别
+# ==========================================
+
+# function: 创建新作用域
+function(my_function arg1 arg2)
+    set(LOCAL_VAR "only visible inside function")
+    set(RESULT "${arg1}_${arg2}")
+    # 必须用PARENT_SCOPE传递给调用者
+    set(RESULT "${RESULT}" PARENT_SCOPE)
+endfunction()
+
+# macro: 文本替换，在调用者作用域执行
+macro(my_macro arg1 arg2)
+    set(LOCAL_VAR "visible in caller scope!")
+    set(RESULT "${arg1}_${arg2}")
+    # 直接修改调用者的变量，无需PARENT_SCOPE
+endmacro()
+
+# 对比图:
+#
+# ┌────────────────────────┬────────────────────────┐
+# │      function()        │       macro()          │
+# ├────────────────────────┼────────────────────────┤
+# │  创建新作用域           │  不创建新作用域         │
+# │  ARGV/ARGC是真变量     │  ARGV/ARGC是文本替换    │
+# │  return()退出函数      │  return()退出调用者!    │
+# │  安全，推荐使用         │  小心使用              │
+# │  需要PARENT_SCOPE      │  直接修改调用者变量     │
+# └────────────────────────┴────────────────────────┘
+
+# cmake_parse_arguments 高级参数解析
+function(my_library)
+    # 定义参数规范
+    set(options STATIC SHARED HEADER_ONLY)
+    set(oneValueArgs NAME ALIAS NAMESPACE)
+    set(multiValueArgs SOURCES HEADERS DEPENDENCIES)
+
+    cmake_parse_arguments(ARG
+        "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN}
+    )
+
+    # 使用解析后的参数
+    if(ARG_HEADER_ONLY)
+        add_library(${ARG_NAME} INTERFACE)
+    elseif(ARG_STATIC)
+        add_library(${ARG_NAME} STATIC ${ARG_SOURCES})
+    elseif(ARG_SHARED)
+        add_library(${ARG_NAME} SHARED ${ARG_SOURCES})
+    else()
+        add_library(${ARG_NAME} ${ARG_SOURCES})
+    endif()
+
+    if(ARG_ALIAS)
+        add_library(${ARG_ALIAS} ALIAS ${ARG_NAME})
+    endif()
+
+    if(ARG_DEPENDENCIES)
+        target_link_libraries(${ARG_NAME} PUBLIC ${ARG_DEPENDENCIES})
+    endif()
+endfunction()
+
+# 使用示例:
+# my_library(
+#     NAME mylib
+#     ALIAS MyProject::mylib
+#     STATIC
+#     SOURCES src/a.cpp src/b.cpp
+#     HEADERS include/a.hpp include/b.hpp
+#     DEPENDENCIES fmt::fmt spdlog::spdlog
+# )
+```
+
+#### FetchContent 远程依赖管理
+
+```cmake
+# ==========================================
+# FetchContent - 配置时下载依赖
+# ==========================================
+include(FetchContent)
+
+# 声明依赖
+FetchContent_Declare(
+    googletest
+    GIT_REPOSITORY https://github.com/google/googletest.git
+    GIT_TAG        v1.14.0
+    GIT_SHALLOW    TRUE       # 浅克隆，加速下载
+)
+
+FetchContent_Declare(
+    fmt
+    GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+    GIT_TAG        10.2.1
+)
+
+FetchContent_Declare(
+    json
+    URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
+    URL_HASH SHA256=d6c65aca6b1ed68e7a182f4757f0f1b0e9eb3d4cf3e5a25e6e9dd3a1a5e926e3
+)
+
+# 一次性获取所有依赖
+FetchContent_MakeAvailable(googletest fmt json)
+
+# 现在可以直接使用
+# target_link_libraries(myapp PRIVATE fmt::fmt nlohmann_json::nlohmann_json)
+
+# ==========================================
+# FetchContent 高级用法
+# ==========================================
+
+# 自定义构建选项
+FetchContent_Declare(spdlog
+    GIT_REPOSITORY https://github.com/gabime/spdlog.git
+    GIT_TAG        v1.13.0
+)
+FetchContent_GetProperties(spdlog)
+if(NOT spdlog_POPULATED)
+    FetchContent_Populate(spdlog)
+    set(SPDLOG_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(SPDLOG_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    add_subdirectory(${spdlog_SOURCE_DIR} ${spdlog_BINARY_DIR})
+endif()
+
+# ==========================================
+# FetchContent vs ExternalProject 对比
+# ==========================================
+#
+# ┌──────────────────┬──────────────────────┐
+# │   FetchContent   │   ExternalProject    │
+# ├──────────────────┼──────────────────────┤
+# │  配置时下载       │  构建时下载           │
+# │  融入当前构建树   │  独立构建系统         │
+# │  target直接可用   │  需手动创建IMPORTED   │
+# │  CMake项目适用    │  任何构建系统都可     │
+# │  简单依赖推荐     │  复杂外部项目推荐     │
+# └──────────────────┴──────────────────────┘
+```
+
+#### 自定义命令与代码生成
+
+```cmake
+# ==========================================
+# add_custom_command 与 add_custom_target
+# ==========================================
+
+# 1. 生成文件的自定义命令
+add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/generated_version.hpp
+    COMMAND ${CMAKE_COMMAND}
+        -DVERSION=${PROJECT_VERSION}
+        -DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/version.hpp.in
+        -DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/generated_version.hpp
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateVersion.cmake
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/version.hpp.in
+    COMMENT "Generating version header"
+)
+
+# 2. 将生成的文件关联到target
+target_sources(mylib PRIVATE
+    ${CMAKE_CURRENT_BINARY_DIR}/generated_version.hpp
+)
+
+# 3. configure_file 模板替换
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/config.hpp.in
+    ${CMAKE_CURRENT_BINARY_DIR}/config.hpp
+    @ONLY  # 只替换@VAR@格式，不替换${VAR}
+)
+
+# config.hpp.in 模板:
+# #pragma once
+# #define PROJECT_VERSION "@PROJECT_VERSION@"
+# #define PROJECT_NAME "@PROJECT_NAME@"
+# #cmakedefine ENABLE_FEATURE_X
+# #cmakedefine01 HAS_OPENSSL
+
+# 4. add_custom_target (总是执行)
+add_custom_target(format
+    COMMAND clang-format -i ${ALL_SOURCE_FILES}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Running clang-format on all source files"
+)
+
+# 5. 构建前/后钩子
+add_custom_command(
+    TARGET mylib POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:mylib>
+        ${CMAKE_SOURCE_DIR}/output/
+    COMMENT "Copying library to output directory"
+)
+```
+
+#### Week 3 输出物清单
+
+| 文件 | 说明 | 完成状态 |
+|------|------|---------|
+| `notes/cmake_functions.md` | function/macro对比笔记 | [ ] |
+| `cmake/MyModule.cmake` | 可复用CMake模块 | [ ] |
+| `notes/fetchcontent.md` | FetchContent使用笔记 | [ ] |
+| `practice/fetchcontent_demo/` | FetchContent练习项目 | [ ] |
+| `notes/custom_commands.md` | 自定义命令笔记 | [ ] |
+| `cmake/version.hpp.in` | 版本头文件模板 | [ ] |
+| `practice/codegen_demo/` | 代码生成管道练习 | [ ] |
+
+#### Week 3 检验标准
+
+- [ ] 能够解释function和macro的作用域区别
+- [ ] 掌握cmake_parse_arguments参数解析
+- [ ] 能够编写可复用的CMake函数模块
+- [ ] 掌握FetchContent的基础和高级用法
+- [ ] 理解FetchContent与ExternalProject的区别与选择
+- [ ] 能够编写add_custom_command生成文件
+- [ ] 掌握configure_file模板替换机制
+- [ ] 理解构建前/后钩子的使用场景
+
+---
+
+### 第四周：跨平台项目结构与安装（35小时）
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Week 4: 专业级项目工程化                                        │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Day 22-23: 项目结构与安装导出                                   │
+│  ┌────────────────────────────────────────────────────────┐    │
+│  │  install(TARGETS) → install(EXPORT) → Config.cmake    │    │
+│  │  让其他项目能 find_package 找到你的库                   │    │
+│  └────────────────────────────────────────────────────────┘    │
+│                                                                 │
+│  Day 24-25: 测试与打包                                          │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐       │
+│  │   CTest     │    │   CPack     │    │  Presets    │       │
+│  │   测试框架  │    │   打包工具  │    │ 构建预设    │       │
+│  └─────────────┘    └─────────────┘    └─────────────┘       │
+│                                                                 │
+│  Day 26-28: Toolchain与综合实战                                  │
+│  ┌────────────────────────────────────────────────────────┐    │
+│  │  Toolchain文件(交叉编译) + CI/CD集成 + 综合项目完善    │    │
+│  └────────────────────────────────────────────────────────┘    │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### 每日任务分解
+
+| Day | 时间 | 上午任务(2.5h) | 下午任务(2.5h) | 输出物 |
+|-----|------|---------------|---------------|--------|
+| 22 | 5h | 标准项目目录结构设计 | install规则与导出系统 | notes/project_structure.md |
+| 23 | 5h | Config.cmake与版本兼容 | 实践：让库可被find_package | practice/installable_lib/ |
+| 24 | 5h | CTest深入（add_test/ctest) | CPack打包(DEB/RPM/ZIP/NSIS) | notes/ctest_cpack.md |
+| 25 | 5h | CMakePresets.json编写 | 多配置构建预设实践 | CMakePresets.json |
+| 26 | 5h | Toolchain文件编写 | 交叉编译实践(ARM) | cmake/toolchain_arm.cmake |
+| 27 | 5h | CI/CD中的CMake最佳实践 | GitHub Actions CMake配置 | .github/workflows/cmake.yml |
+| 28 | 5h | 综合项目完善与集成 | 最终测试与文档完善 | 完整项目模板 |
 
 **学习目标**：构建专业的项目结构，支持安装和导出
 
@@ -482,6 +1259,271 @@ if(MYPROJECT_INSTALL)
     )
 endif()
 ```
+
+#### CTest 测试框架深入
+
+```cmake
+# ==========================================
+# CTest 深入使用
+# ==========================================
+
+enable_testing()
+
+# 基本测试注册
+add_test(NAME unit_tests COMMAND myproject_tests)
+
+# 带参数的测试
+add_test(NAME integration_test
+    COMMAND myapp --config ${CMAKE_SOURCE_DIR}/test/config.json
+)
+
+# 设置测试属性
+set_tests_properties(unit_tests PROPERTIES
+    TIMEOUT 60                    # 超时秒数
+    LABELS "unit"                 # 标签分类
+    ENVIRONMENT "ENV_VAR=value"   # 环境变量
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+)
+
+set_tests_properties(integration_test PROPERTIES
+    LABELS "integration"
+    TIMEOUT 300
+    FIXTURES_REQUIRED server_running  # 依赖fixture
+)
+
+# 使用GTest自动发现测试
+include(GoogleTest)
+gtest_discover_tests(myproject_tests
+    PROPERTIES
+        LABELS "unit"
+        TIMEOUT 30
+    DISCOVERY_TIMEOUT 10
+)
+
+# 运行测试命令：
+# ctest --test-dir build            # 运行所有测试
+# ctest -L unit                     # 只运行unit标签
+# ctest -R "test_engine*"           # 正则匹配
+# ctest -j$(nproc)                  # 并行运行
+# ctest --output-on-failure         # 失败时显示输出
+# ctest --rerun-failed              # 重跑失败的测试
+```
+
+#### CPack 打包配置
+
+```cmake
+# ==========================================
+# CPack 打包配置
+# ==========================================
+include(CPack)
+
+# 基本信息
+set(CPACK_PACKAGE_NAME "${PROJECT_NAME}")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PROJECT_DESCRIPTION}")
+set(CPACK_PACKAGE_VENDOR "MyOrg")
+set(CPACK_PACKAGE_CONTACT "dev@example.com")
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE")
+set(CPACK_RESOURCE_FILE_README "${CMAKE_SOURCE_DIR}/README.md")
+
+# 按平台配置
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(CPACK_GENERATOR "DEB;RPM;TGZ")
+
+    # DEB包配置
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "libfmt-dev (>= 10.0)")
+    set(CPACK_DEBIAN_PACKAGE_SECTION "devel")
+
+    # RPM包配置
+    set(CPACK_RPM_PACKAGE_REQUIRES "fmt-devel >= 10.0")
+
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    set(CPACK_GENERATOR "NSIS;ZIP")
+
+    # NSIS安装器配置
+    set(CPACK_NSIS_DISPLAY_NAME "${PROJECT_NAME}")
+    set(CPACK_NSIS_INSTALL_ROOT "C:\\\\Program Files")
+
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    set(CPACK_GENERATOR "DragNDrop;TGZ")
+endif()
+
+# 打包命令：
+# cmake --build build --target package
+# 或: cd build && cpack -G DEB
+```
+
+#### CMakePresets.json
+
+```json
+// CMakePresets.json - 构建预设配置
+{
+    "version": 6,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 25,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "default",
+            "hidden": true,
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_CXX_STANDARD": "17",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        },
+        {
+            "name": "debug",
+            "inherits": "default",
+            "displayName": "Debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "ENABLE_ASAN": "ON"
+            }
+        },
+        {
+            "name": "release",
+            "inherits": "default",
+            "displayName": "Release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "ci",
+            "inherits": "default",
+            "displayName": "CI Build",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "BUILD_TESTING": "ON",
+                "MYPROJECT_BUILD_DOCS": "OFF"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "debug",
+            "configurePreset": "debug"
+        },
+        {
+            "name": "release",
+            "configurePreset": "release"
+        }
+    ],
+    "testPresets": [
+        {
+            "name": "default",
+            "configurePreset": "debug",
+            "output": {
+                "outputOnFailure": true
+            },
+            "execution": {
+                "noTestsAction": "error",
+                "timeout": 120
+            }
+        }
+    ]
+}
+```
+
+```
+使用预设的命令：
+cmake --preset debug           # 配置
+cmake --build --preset debug   # 构建
+ctest --preset default         # 测试
+```
+
+#### Toolchain文件与交叉编译
+
+```cmake
+# ==========================================
+# cmake/toolchain_arm.cmake
+# ARM交叉编译Toolchain文件
+# ==========================================
+
+set(CMAKE_SYSTEM_NAME Linux)
+set(CMAKE_SYSTEM_PROCESSOR arm)
+
+# 交叉编译工具链路径
+set(TOOLCHAIN_PREFIX arm-linux-gnueabihf)
+set(CMAKE_C_COMPILER ${TOOLCHAIN_PREFIX}-gcc)
+set(CMAKE_CXX_COMPILER ${TOOLCHAIN_PREFIX}-g++)
+
+# Sysroot（目标系统的根文件系统）
+set(CMAKE_SYSROOT /opt/arm-sysroot)
+
+# 查找策略
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)   # 主机程序
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)    # 目标库
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)    # 目标头文件
+set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)    # 目标包
+
+# 使用方式：
+# cmake -S . -B build-arm -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain_arm.cmake
+```
+
+#### CI/CD集成示例
+
+```yaml
+# .github/workflows/cmake.yml
+name: CMake Build & Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        build_type: [Debug, Release]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Configure
+      run: >
+        cmake -S . -B build
+        -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        -DBUILD_TESTING=ON
+
+    - name: Build
+      run: cmake --build build --config ${{ matrix.build_type }}
+
+    - name: Test
+      run: ctest --test-dir build -C ${{ matrix.build_type }} --output-on-failure
+```
+
+#### Week 4 输出物清单
+
+| 文件 | 说明 | 完成状态 |
+|------|------|---------|
+| `notes/project_structure.md` | 项目结构设计笔记 | [ ] |
+| `practice/installable_lib/` | 可安装库练习项目 | [ ] |
+| `notes/ctest_cpack.md` | CTest与CPack笔记 | [ ] |
+| `CMakePresets.json` | 构建预设配置 | [ ] |
+| `cmake/toolchain_arm.cmake` | ARM交叉编译Toolchain | [ ] |
+| `.github/workflows/cmake.yml` | CI/CD配置 | [ ] |
+| 完整项目模板 | 综合项目最终版 | [ ] |
+
+#### Week 4 检验标准
+
+- [ ] 能够设计符合规范的C++项目目录结构
+- [ ] 掌握install()和export()的配合使用
+- [ ] 能够让自己的库被find_package找到并使用
+- [ ] 掌握CTest的测试注册与运行
+- [ ] 能够配置CPack生成安装包（DEB/RPM/ZIP）
+- [ ] 能够编写CMakePresets.json简化构建配置
+- [ ] 理解Toolchain文件在交叉编译中的作用
+- [ ] 能够配置GitHub Actions进行CI/CD
 
 ---
 
@@ -1012,6 +2054,101 @@ TEST_F(EngineTest, MoveSemantics) {
 
 ---
 
+## 月度验收标准
+
+### 知识掌握
+
+- [ ] 能够流利解释Modern CMake与传统CMake的核心区别
+- [ ] 掌握Target-centric理念并应用于实际项目
+- [ ] 理解CMake的Configure/Generate/Build/Install四个阶段
+- [ ] 掌握变量作用域、缓存变量和策略系统
+
+### 实践能力
+
+- [ ] 能够从零搭建一个完整的Modern CMake项目
+- [ ] 掌握PUBLIC/PRIVATE/INTERFACE的传播规则
+- [ ] 能够编写Generator Expressions处理跨平台需求
+- [ ] 能够编写可复用的CMake函数和模块
+- [ ] 掌握FetchContent管理远程依赖
+
+### 工程化能力
+
+- [ ] 项目支持install和find_package
+- [ ] 集成CTest测试框架
+- [ ] 配置CPack生成安装包
+- [ ] 编写CMakePresets.json
+- [ ] 理解Toolchain文件与交叉编译
+- [ ] 能够配置CI/CD自动化构建
+
+### 综合项目检验
+
+- [ ] 项目模板能在Linux/macOS/Windows上正确构建
+- [ ] 所有单元测试通过
+- [ ] 生成的库可以被其他项目通过find_package使用
+- [ ] 代码通过静态分析（clang-tidy/cppcheck）
+
+---
+
+### 本月知识图谱
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Month 37: Modern CMake 知识体系                   │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   基础层                                                            │
+│   ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐             │
+│   │执行流程   │ │Target模型 │ │变量系统   │ │策略系统   │             │
+│   │Configure │ │Properties│ │ Scope    │ │ Policy   │             │
+│   │Generate  │ │ PUBLIC   │ │ Cache    │ │ CMP0xxx  │             │
+│   │ Build    │ │ PRIVATE  │ │ Env      │ │          │             │
+│   └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘             │
+│        └────────────┴────────────┴────────────┘                    │
+│                          │                                          │
+│   依赖管理层             ▼                                          │
+│   ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐             │
+│   │find_pkg  │ │IMPORTED  │ │GenExpr   │ │Transitive│             │
+│   │MODULE    │ │ Targets  │ │$<...>    │ │Dependency│             │
+│   │CONFIG    │ │          │ │          │ │          │             │
+│   └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘             │
+│        └────────────┴────────────┴────────────┘                    │
+│                          │                                          │
+│   模块化层               ▼                                          │
+│   ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐             │
+│   │function  │ │Fetch     │ │External  │ │Custom    │             │
+│   │macro     │ │Content   │ │Project   │ │Command   │             │
+│   │parse_args│ │          │ │          │ │configure │             │
+│   └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘             │
+│        └────────────┴────────────┴────────────┘                    │
+│                          │                                          │
+│   工程化层               ▼                                          │
+│   ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐             │
+│   │Install   │ │CTest     │ │CPack     │ │Presets   │             │
+│   │Export    │ │GTest     │ │DEB/RPM   │ │Toolchain │             │
+│   │Config.cmake│        │ │NSIS/ZIP  │ │CI/CD     │             │
+│   └──────────┘ └──────────┘ └──────────┘ └──────────┘             │
+│                                                                     │
+│   ═════════════════════════════════════════════════                 │
+│                    ▼                                                │
+│              专业级C++项目模板                                       │
+│              (Month 37 毕业项目)                                    │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## 下月预告
 
-Month 38将学习**vcpkg包管理器**，掌握微软开源的跨平台C++包管理工具，实现依赖的自动化管理。
+Month 38将学习**vcpkg包管理器**，掌握微软开源的跨平台C++包管理工具，实现依赖的自动化管理。将与本月学习的CMake深度配合，建立完整的C++项目依赖管理链。
+
+```
+Month 37 (CMake)          Month 38 (vcpkg)
+┌─────────────────┐      ┌─────────────────┐
+│ Modern CMake    │  →   │ 包管理          │
+│ Target-centric  │      │ 依赖自动化      │
+│ Install/Export  │      │ Manifest模式    │
+│ CI/CD          │      │ vcpkg.json     │
+└─────────────────┘      └─────────────────┘
+```
+
